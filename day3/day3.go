@@ -45,9 +45,7 @@ func followPaths(paths []Path, seen map[Coord]bool) []Coord {
 
 		for i := 0; i < p.distance; i++ {
 			c := Coord{x, y}
-
 			_, alreadyVisited := ownCoords[c]
-
 			if !alreadyVisited && seen[c] && (x != 0 && y != 0) {
 				intersections = append(intersections, c)
 			}
@@ -116,10 +114,6 @@ func partOne(wire1Paths []Path, wire2Paths []Path) {
 	seenCoordinates := make(map[Coord]bool, 0)
 	followPaths(wire1Paths, seenCoordinates)
 
-	xx := Coord{36, -592}
-	if _, ok := seenCoordinates[xx]; ok {
-		fmt.Println("got there")
-	}
 	intersections := followPaths(wire2Paths, seenCoordinates)
 
 	// find the manhattan distance of the closest
@@ -141,13 +135,8 @@ func partTwo(wire1Paths []Path, wire2Paths []Path) {
 	seenCoordinates := make(map[Coord]int, 0)
 	followPathsSteps(wire1Paths, seenCoordinates)
 
-	xx := Coord{36, -592}
-	if _, ok := seenCoordinates[xx]; ok {
-		fmt.Println("got there")
-	}
 	intersections := followPathsSteps(wire2Paths, seenCoordinates)
 
-	// find the manhattan distance of the closest
 	smallest := math.MaxInt64
 	for _, v := range intersections {
 		if v < smallest {
