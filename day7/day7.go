@@ -9,6 +9,14 @@ import (
 	"strings"
 )
 
+type Amplifier struct {
+	program []int64
+	pos int
+	input *Input
+	output int64
+	feedback bool
+}
+
 type Input struct {
 	value int64
 	next *Input
@@ -137,6 +145,7 @@ func cycle(program []int64, pos int, input *Input) (p int, output int64, finishe
 		posDest := program[pos+1]
 		program[posDest] = input.value
 		if input.next != nil {
+			input.value = input.next.value
 			input.next = input.next.next
 		}
 		pos = pos + 2
@@ -198,7 +207,7 @@ func cycle(program []int64, pos int, input *Input) (p int, output int64, finishe
 func runUntilHalt(program []int64, input *Input) (output int64) {
 	done := false
 	pos := 0
-	for !done {
+	for !done && output == 0 {
 		pos, output, done = cycle(program, pos, input)
 	}
 	return output
@@ -217,7 +226,6 @@ func thrusterSignal(program []int64, ampSequence []int) int64 {
 		// craft our input chain
 		inputs := Input{int64(amplifier), &Input{chainInput, nil}}
 
-		fmt.Printf("Running amplifier %d with input %d\n", amplifier, chainInput)
 		chainInput = runUntilHalt(candidateProg, &inputs)
 	}
 
@@ -226,8 +234,8 @@ func thrusterSignal(program []int64, ampSequence []int) int64 {
 
 func main() {
 
-	bd, err := ioutil.ReadFile("test.txt")
-	//bd, err := ioutil.ReadFile("input.txt")
+	//bd, err := ioutil.ReadFile("test.txt")
+	bd, err := ioutil.ReadFile("input.txt")
 	if err != nil {
 		os.Exit(1)
 	}
@@ -246,6 +254,10 @@ func main() {
 	}
 
 	sort.Slice(thrusterSignals, func(i, j int) bool { return thrusterSignals[i] < thrusterSignals[j] })
-	fmt.Println(thrusterSignals)
+	fmt.Println(thrusterSignals[len(thrusterSignals)-1])
+
+	// Feedback loop mode begins
+	inputPerms = permutations([]int{5,6,7,8,9})
+
 }
 
