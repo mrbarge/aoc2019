@@ -12,15 +12,22 @@ import (
 type Amplifier struct {
 	program []int64
 	pos int
-	input *Input
+	input []int64
+	inputPos int
 	output int64
 	feedback bool
+	next *Amplifier
+	state AmplifierState
+	id int
 }
 
-type Input struct {
-	value int64
-	next *Input
-}
+type AmplifierState int
+const (
+	RUN = iota
+	EMIT
+	BLOCK
+	FINISH
+)
 
 type ParameterMode int
 const (
@@ -120,116 +127,156 @@ func getPositionOrImmediate(program []int64, mode ParameterMode, value int64) in
 	}
 }
 
-func cycle(program []int64, pos int, input *Input) (p int, output int64, finished bool) {
+func cycle(amp *Amplifier) (output int64, finished bool) {
 
-	op := parseOpCode(program[pos])
-	modes := parseModes(program[pos])
+	op := parseOpCode(amp.program[amp.pos])
+	modes := parseModes(amp.program[amp.pos])
 
+	// set amp as running
+	amp.state = RUN
 	switch op {
 
 	case ADDITION:
-		value1 := getPositionOrImmediate(program, modes[0], program[pos+1])
-		value2 := getPositionOrImmediate(program, modes[1], program[pos+2])
-		posDest := program[pos+3]
-		program[posDest] = value1 + value2
-		pos = pos + 4
+		value1 := getPositionOrImmediate(amp.program, modes[0], amp.program[amp.pos+1])
+		value2 := getPositionOrImmediate(amp.program, modes[1], amp.program[amp.pos+2])
+		posDest := amp.program[amp.pos+3]
+		amp.program[posDest] = value1 + value2
+		amp.pos = amp.pos + 4
 
 	case MULTIPLY:
-		value1 := getPositionOrImmediate(program, modes[0], program[pos+1])
-		value2 := getPositionOrImmediate(program, modes[1], program[pos+2])
-		posDest := program[pos+3]
-		program[posDest] = value1 * value2
-		pos = pos + 4
+		value1 := getPositionOrImmediate(amp.program, modes[0], amp.program[amp.pos+1])
+		value2 := getPositionOrImmediate(amp.program, modes[1], amp.program[amp.pos+2])
+		posDest := amp.program[amp.pos+3]
+		amp.program[posDest] = value1 * value2
+		amp.pos = amp.pos + 4
 
 	case STORE:
-		posDest := program[pos+1]
-		program[posDest] = input.value
-		if input.next != nil {
-			input.value = input.next.value
-			input.next = input.next.next
+		posDest := amp.program[amp.pos+1]
+		if amp.inputPos > len(amp.input)-1 {
+			// waiting for new input
+			amp.state = BLOCK
+		} else {
+			amp.program[posDest] = amp.input[amp.inputPos]
+			amp.inputPos += 1
+			amp.pos = amp.pos + 2
 		}
-		pos = pos + 2
 
 	case OUTPUT:
-		posDest := getPositionOrImmediate(program, modes[0], program[pos+1])
-		output = posDest
-		pos = pos + 2
+		posDest := getPositionOrImmediate(amp.program, modes[0], amp.program[amp.pos+1])
+		amp.output = posDest
+		amp.pos = amp.pos + 2
+		amp.state = EMIT
 
 	case JIT:
-		value1 := getPositionOrImmediate(program, modes[0], program[pos+1])
-		value2 := getPositionOrImmediate(program, modes[1], program[pos+2])
+		value1 := getPositionOrImmediate(amp.program, modes[0], amp.program[amp.pos+1])
+		value2 := getPositionOrImmediate(amp.program, modes[1], amp.program[amp.pos+2])
 		if value1 != 0 {
-			pos = int(value2)
+			amp.pos = int(value2)
 		} else {
-			pos += 3
+			amp.pos += 3
 		}
 
 	case JIF:
-		value1 := getPositionOrImmediate(program, modes[0], program[pos+1])
-		value2 := getPositionOrImmediate(program, modes[1], program[pos+2])
+		value1 := getPositionOrImmediate(amp.program, modes[0], amp.program[amp.pos+1])
+		value2 := getPositionOrImmediate(amp.program, modes[1], amp.program[amp.pos+2])
 		if value1 == 0 {
-			pos = int(value2)
+			amp.pos = int(value2)
 		} else {
-			pos += 3
+			amp.pos += 3
 		}
 
 	case LT:
-		value1 := getPositionOrImmediate(program, modes[0], program[pos+1])
-		value2 := getPositionOrImmediate(program, modes[1], program[pos+2])
-		posDest := program[pos+3]
+		value1 := getPositionOrImmediate(amp.program, modes[0], amp.program[amp.pos+1])
+		value2 := getPositionOrImmediate(amp.program, modes[1], amp.program[amp.pos+2])
+		posDest := amp.program[amp.pos+3]
 		if value1 < value2 {
-			program[posDest] = 1
+			amp.program[posDest] = 1
 		} else {
-			program[posDest] = 0
+			amp.program[posDest] = 0
 		}
-		pos += 4
+		amp.pos += 4
 
 	case EQ:
-		value1 := getPositionOrImmediate(program, modes[0], program[pos+1])
-		value2 := getPositionOrImmediate(program, modes[1], program[pos+2])
-		posDest := program[pos+3]
+		value1 := getPositionOrImmediate(amp.program, modes[0], amp.program[amp.pos+1])
+		value2 := getPositionOrImmediate(amp.program, modes[1], amp.program[amp.pos+2])
+		posDest := amp.program[amp.pos+3]
 		if value1 == value2 {
-			program[posDest] = 1
+			amp.program[posDest] = 1
 		} else {
-			program[posDest] = 0
+			amp.program[posDest] = 0
 		}
-		pos += 4
+		amp.pos += 4
 
 	case QUIT:
+		amp.state = FINISH
 		finished = true
+
 	default:
-		fmt.Printf("Unknown op code: %d\n", program[pos])
+		fmt.Printf("Unknown op code: %d\n", amp.program[amp.pos])
 	}
 
-	return pos, output, finished
+	return amp.output, finished
 }
 
-func runUntilHalt(program []int64, input *Input) (output int64) {
-	done := false
-	pos := 0
-	for !done && output == 0 {
-		pos, output, done = cycle(program, pos, input)
+func runUntilInterrupt(amp *Amplifier) (signal int64, done bool) {
+	done = false
+	for !done && amp.state == RUN {
+		signal, done = cycle(amp)
 	}
-	return output
+	return signal, done
 }
 
-func thrusterSignal(program []int64, ampSequence []int) int64 {
+func simulation(program []int64, phaseSequence []int, feedback bool) int64 {
 
-	// first amplifier gets 0 input
-	chainInput := int64(0)
-
-	for _, amplifier := range ampSequence {
+	// create our amplifiers
+	amps := make([]*Amplifier, 0)
+	for i, phase := range phaseSequence {
 		// clone the program
 		candidateProg := make([]int64, len(program))
 		copy(candidateProg, program)
 
-		// craft our input chain
-		inputs := Input{int64(amplifier), &Input{chainInput, nil}}
-
-		chainInput = runUntilHalt(candidateProg, &inputs)
+		// create the amplifier
+		amp := Amplifier{candidateProg, 0, []int64{int64(phase)}, 0,  0,false, nil,RUN,i}
+		amps = append(amps, &amp)
 	}
 
-	return chainInput
+	// chain them together in a loop
+	for i := 0; i < len(amps); i++ {
+		if i == len(amps)-1 {
+			if feedback {
+				amps[i].next = amps[0]
+			}
+		} else {
+			amps[i].next = amps[i+1]
+		}
+	}
+
+	currentAmp := amps[0]
+	// 0 signal for first amp
+	currentAmp.input = append(currentAmp.input, 0)
+
+	finished := false
+	signal := int64(0)
+	for ; currentAmp != nil && !finished; {
+		ampquit := false
+		signal, ampquit = runUntilInterrupt(currentAmp)
+		// reset amp for next time
+		currentAmp.state = RUN
+
+		if ampquit && currentAmp.id == 4 {
+			finished = true
+		}
+
+		// move on to next amp
+		currentAmp = currentAmp.next
+		if currentAmp != nil {
+			currentAmp.input = append(currentAmp.input, signal)
+		}
+
+
+	}
+
+	return signal
 }
 
 func main() {
@@ -249,7 +296,7 @@ func main() {
 
 	thrusterSignals := make([]int64, 0)
 	for _, inputPerm := range inputPerms {
-		thrust := thrusterSignal(originalProg, inputPerm)
+		thrust := simulation(originalProg, inputPerm, false)
 		thrusterSignals = append(thrusterSignals, thrust)
 	}
 
@@ -257,7 +304,15 @@ func main() {
 	fmt.Println(thrusterSignals[len(thrusterSignals)-1])
 
 	// Feedback loop mode begins
-	inputPerms = permutations([]int{5,6,7,8,9})
+	feedbackPerms := permutations([]int{5,6,7,8,9})
+	thrusterSignals = make([]int64, 0)
+	for _, feedbackPerm := range feedbackPerms {
+		thrust := simulation(originalProg, feedbackPerm, true)
+		thrusterSignals = append(thrusterSignals, thrust)
+	}
+
+	sort.Slice(thrusterSignals, func(i, j int) bool { return thrusterSignals[i] < thrusterSignals[j] })
+	fmt.Println(thrusterSignals[len(thrusterSignals)-1])
 
 }
 
