@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -15,6 +16,11 @@ const (
 	RELATIVE
 )
 
+type Robot struct {
+	pos Coord
+	dir Direction
+}
+
 type Computer struct {
 	program []int64
 	input int64
@@ -23,6 +29,14 @@ type Computer struct {
 	finished bool
 	outputs []int64
 }
+
+type Direction int
+const (
+	LEFT = iota
+	RIGHT
+	UP
+	DOWN
+)
 
 type Coord struct {
 	x int
@@ -33,12 +47,6 @@ type Paint int
 const (
 	BLACK = iota
 	WHITE
-)
-
-type Direction int
-const (
-	LEFT = iota
-	RIGHT
 )
 
 type OpCode int
@@ -201,38 +209,141 @@ func cycle(c *Computer) {
 	}
 }
 
+func turn(facing Direction, turning Direction) Direction {
+	switch facing {
+	case UP:
+		if turning == LEFT { return LEFT } else { return RIGHT }
+	case DOWN:
+		if turning == LEFT { return RIGHT } else { return LEFT }
+	case LEFT:
+		if turning == LEFT { return DOWN } else { return UP }
+	case RIGHT:
+		if turning == LEFT { return UP } else { return DOWN }
+	default:
+		panic("Something has gone wrong here")
+	}
+}
+
+func moveRobot(r *Robot, d Direction) {
+	r.dir = turn(r.dir, d)
+	switch r.dir {
+	case UP:
+			r.pos.y -= 1
+	case DOWN:
+			r.pos.y += 1
+	case LEFT:
+			r.pos.x -= 1
+	case RIGHT:
+			r.pos.x += 1
+	}
+}
+
 func partOne(program []int64) (painted int) {
-	c := Computer{program, input,0, 0, false, []int64{} }
+	c := Computer{program, 0,0, 0, false, []int64{} }
+	r := Robot{ Coord{0, 0}, UP }
 
 	visited := make(map[Coord]Paint, 0)
 
 	for !c.finished {
-		// get colour
-		cycle(&c)
-		cycle(&c)
-		if len(c.outputs) != 2 {
-			panic("Expected outputs but got none.")
+		// set input to current panel
+		if _, ok := visited[r.pos]; !ok {
+			c.input = 0
+		} else {
+			c.input = int64(visited[r.pos])
 		}
-		colour := c.outputs[0]
-		direction := c.outputs[1]
+
+		// run program, get colour and direction
+		for !c.finished && len(c.outputs) != 2 {
+			cycle(&c)
+		}
+
+		if c.finished {
+			break
+		}
+
+		colour := Paint(c.outputs[0])
+		direction := Direction(c.outputs[1])
 		c.outputs = []int64{}
 
-		// get direction
-		cycle(&c)
-		if len(c.outputs) == 0 {
-			panic("Expected output but got none.")
-		}
-
-
+		visited[r.pos] = colour
+		moveRobot(&r, direction)
 	}
 
-	for _, v := range visited {
-		if v == WHITE {
-			painted += 1
+	for k, _ := range visited {
+		fmt.Println(k)
+	}
+	return len(visited)
+}
+
+func partTwo(program []int64) (painted int) {
+	c := Computer{program, 1,0, 0, false, []int64{} }
+	r := Robot{ Coord{0, 0}, UP }
+
+	visited := make(map[Coord]Paint, 0)
+
+	for !c.finished {
+		// set input to current panel
+		if _, ok := visited[r.pos]; !ok {
+			c.input = 1
+		} else {
+			c.input = int64(visited[r.pos])
 		}
+
+		// run program, get colour and direction
+		for !c.finished && len(c.outputs) != 2 {
+			cycle(&c)
+		}
+
+		if c.finished {
+			break
+		}
+
+		colour := Paint(c.outputs[0])
+		direction := Direction(c.outputs[1])
+		c.outputs = []int64{}
+
+		visited[r.pos] = colour
+		moveRobot(&r, direction)
 	}
 
-	return painted
+	minX := math.MaxInt64
+	maxX := math.MinInt64
+	minY := math.MaxInt64
+	maxY := math.MinInt64
+
+	for k, _ := range visited {
+		if k.x < minX { minX = k.x }
+		if k.x > maxX { maxX = k.x }
+		if k.y < minY { minY = k.y }
+		if k.y > maxY { maxY = k.y }
+	}
+
+	region := make([][]Paint, 0)
+	for i := 0; i < (maxY+(-1*minY)+1); i++ {
+		region = append(region, make([]Paint, maxX+(-1*minX)+1))
+	}
+
+	for k, v := range visited {
+		cx := k.x + (-1*minX)
+		cy := k.y + (-1*minY)
+		region[cy][cx] = v
+	}
+
+	printit(region)
+	return len(visited)
+}
+
+func printit(d [][]Paint) {
+	for _, v := range d {
+		for _, w := range v {
+			if w == WHITE {
+				fmt.Printf("X")
+			} else {
+				fmt.Printf(" ")
+			}
+		}
+		fmt.Println("")
+	}
 
 }
 
@@ -254,8 +365,14 @@ func main() {
 
 
 	// part 1
+	bufferSpace := make([]int64, 10000)
 	candidateProg = append(candidateProg, bufferSpace...)
+	fmt.Println(partOne(candidateProg))
 
-
+	// part 2
+	copy(candidateProg, originalProg)
+	bufferSpace = make([]int64, 10000)
+	candidateProg = append(candidateProg, bufferSpace...)
+	partTwo(candidateProg)
 }
 
