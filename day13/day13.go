@@ -150,7 +150,6 @@ func cycle(c *Computer) {
 		c.pos = c.pos + 4
 
 	case STORE:
-		fmt.Println("Store time")
 		if len(c.inputs) == 0 {
 			c.inputBlocked = true
 		} else {
@@ -162,7 +161,6 @@ func cycle(c *Computer) {
 		}
 
 	case OUTPUT:
-		fmt.Println("Output time")
 		posDest := getPositionOrImmediate(c, modes[0], c.program[c.pos+1], true)
 		c.outputs = append(c.outputs, posDest)
 		c.pos = c.pos + 2
