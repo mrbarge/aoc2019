@@ -87,6 +87,40 @@ func energy(p []*Position, v []*Velocity) (r []float64) {
 	return r
 }
 
+func allDone(b []bool) bool {
+	for _, v := range b {
+		if !v {
+			return false
+		}
+	}
+	return true
+}
+
+func findStepsUntilRepeat(p []*Position, v []*Velocity) (c []int64) {
+	done := make([]bool, len(p))
+	stepCount := make([]int64, len(p))
+	starting := make([]Position, len(p))
+	steps := int64(0)
+	for _, val := range p {
+		//done = append(done, false)
+		starting = append(starting, Position{val.x, val.y, val.z})
+	}
+
+	for !allDone(done) {
+		step(p, v)
+		for i, _ := range p {
+			if *p[i] == starting[i] && !done[i] {
+				done[i] = true
+				stepCount[i] = steps
+				fmt.Printf("Done %d\n", i)
+			}
+		}
+		steps += 1
+	}
+
+	return stepCount
+}
+
 func test() ([]*Position, []*Velocity) {
 	p := make([]*Position, 0)
 	v := make([]*Velocity, 0)
@@ -123,4 +157,8 @@ func main() {
 	}
 
 	fmt.Println(energy(p, v))
+
+	p, v = input()
+	stepCount := findStepsUntilRepeat(p, v)
+	fmt.Println(stepCount)
 }
