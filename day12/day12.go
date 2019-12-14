@@ -96,29 +96,64 @@ func allDone(b []bool) bool {
 	return true
 }
 
-func findStepsUntilRepeat(p []*Position, v []*Velocity) (c []int64) {
-	done := make([]bool, len(p))
-	stepCount := make([]int64, len(p))
-	starting := make([]Position, len(p))
-	steps := int64(0)
-	for _, val := range p {
-		//done = append(done, false)
-		starting = append(starting, Position{val.x, val.y, val.z})
+func findStepsUntilRepeat(p []*Position, v []*Velocity) (c int64) {
+
+	// flag when each axis has cycled
+	done := make([]bool, 3)
+	// steps for each axis to cycle
+	stepCount := make([]int64, 3)
+	// gen starting point
+	startingPos := make([]Position, len(p))
+	startingVel := make([]Velocity, len(v))
+	for i, pos := range p {
+		startingPos[i] = Position{pos.x, pos.y, pos.z }
+		startingVel[i] = Velocity{v[i].x, v[i].y, v[i].z }
 	}
 
 	for !allDone(done) {
+
 		step(p, v)
-		for i, _ := range p {
-			if *p[i] == starting[i] && !done[i] {
-				done[i] = true
-				stepCount[i] = steps
-				fmt.Printf("Done %d\n", i)
+
+		// for each axis
+		for axisIdx, isAxisDone := range done {
+			if !isAxisDone {
+				// have all positions cycled back to start
+				cycled := true
+				for posIDx, pos := range p {
+					// if I had known part 2 in advance I would refactor the original x/y/z into an array
+					// but I just want this over with
+					if axisIdx == 0 {
+						if pos.x != startingPos[posIDx].x || v[posIDx].x != startingVel[posIDx].x {
+							cycled = false
+							break
+						}
+					} else if axisIdx == 1 {
+						if pos.y != startingPos[posIDx].y || v[posIDx].x != startingVel[posIDx].y {
+							cycled = false
+							break
+						}
+					} else {
+						if pos.z != startingPos[posIDx].z || v[posIDx].x != startingVel[posIDx].z {
+							cycled = false
+							break
+						}
+					}
+				}
+				if cycled {
+					fmt.Printf("Done %d\n", axisIdx)
+					done[axisIdx] = true
+				} else {
+					stepCount[axisIdx] += 1
+				}
 			}
 		}
-		steps += 1
 	}
 
-	return stepCount
+	//for i, _ := range stepCount {
+	//	stepCount[i] += 1
+	//}
+	fmt.Println(stepCount)
+	return LCM(stepCount[0], stepCount[1], stepCount[2])
 }
 
 func test() ([]*Position, []*Velocity) {
@@ -147,6 +182,29 @@ func input() ([]*Position, []*Velocity) {
 	v = append(v, &Velocity{0,0,0})
 	v = append(v, &Velocity{0,0,0})
 	return p, v
+}
+
+// greatest common divisor (GCD) via Euclidean algorithm
+// via https://siongui.github.io/2017/06/03/go-find-lcm-by-gcd/
+func GCD(a, b int64) int64 {
+	for b != 0 {
+		t := b
+		b = a % b
+		a = t
+	}
+	return a
+}
+
+// find Least Common Multiple (LCM) via GCD
+// via https://siongui.github.io/2017/06/03/go-find-lcm-by-gcd/
+func LCM(a, b int64, integers ...int64) int64 {
+	result := a * b / GCD(a, b)
+
+	for i := 0; i < len(integers); i++ {
+		result = LCM(result, integers[i])
+	}
+
+	return result
 }
 
 func main() {
