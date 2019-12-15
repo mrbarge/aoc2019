@@ -103,10 +103,8 @@ func partOne(f map[string]Formula, fuelGoal int) int {
 
 func partTwo(f map[string]Formula) {
 	fmt.Println(sort.Search(1000000000000, func(n int) bool {
-		fmt.Println(n)
 		return partOne(f, n) > 1000000000000
 	}) - 1)
-
 }
 
 func main() {
