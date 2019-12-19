@@ -3,17 +3,13 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/simple"
+	"gonum.org/v1/gonum/graph/traverse"
 	"os"
 	"unicode"
 )
 
-//type Node struct {
-//	pos Coord
-//	tile rune
-//	next []*Node
-//}
-//
 type Coord struct {
 	x int
 	y int
@@ -56,11 +52,12 @@ func getNeighbours(pos Coord, grid Grid) (neighbours []Coord) {
 	return neighbours
 }
 
-func makeGraph(grid Grid) (*simple.UndirectedGraph, map[Coord]int64) {
+func makeGraph(grid Grid) (*simple.UndirectedGraph, map[Coord]int64, map[int64]Coord) {
 
 	g := simple.NewUndirectedGraph()
 
 	nodeCoordToId := make(map[Coord]int64)
+	nodeIdToCoord := make(map[int64]Coord)
 
 	nodeCount := int64(0)
 	for y := 1; y < len(grid)-1; y++ {
@@ -69,6 +66,7 @@ func makeGraph(grid Grid) (*simple.UndirectedGraph, map[Coord]int64) {
 			g.AddNode(simple.Node(nodeCount))
 			if _, ok := nodeCoordToId[tmpCoord]; !ok {
 				nodeCoordToId[tmpCoord] = nodeCount
+				nodeIdToCoord[nodeCount] = tmpCoord
 			}
 			nodeCount += 1
 		}
@@ -89,7 +87,15 @@ func makeGraph(grid Grid) (*simple.UndirectedGraph, map[Coord]int64) {
 		}
 	}
 
-	return g, nodeCoordToId
+	return g, nodeCoordToId, nodeIdToCoord
+}
+
+func (g Grid) isDoor(c Coord) bool {
+	return unicode.IsUpper(g[c.y][c.x])
+}
+
+func (g Grid) isKey(c Coord) bool {
+	return unicode.IsLower(g[c.y][c.x])
 }
 
 func main() {
@@ -124,8 +130,27 @@ func main() {
 		yPos++
 	}
 
-	_, nodemap := makeGraph(grid)
-	startingNode := nodemap[startingPos]
+	g, nodeCoordToId, nodeIdToCoord := makeGraph(grid)
+	startingNode := nodeCoordToId[startingPos]
+
+	b := traverse.BreadthFirst {
+		Traverse: func(e graph.Edge) bool {
+			// is the 'to' edge a door?
+			nodeTo := e.To()
+			toCoord := nodeIdToCoord[nodeTo.ID()]
+
+			if grid.isDoor(toCoord) {
+				// do we have a key
+				keyName := unicode.ToLower(grid[toCoord.y][toCoord.x])
+				keyCoord := keys[keyName]
+				keyNodeId := nodeCoordToId[keyCoord]
+				fmt.Println(keyNodeId)
+			}
+			return true
+		},
+		Visit: func(n graph.Node) {
+		},
+	}
 
 	fmt.Println(startingNode)
 
