@@ -3,7 +3,11 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"gonum.org/v1/gonum/graph/path"
+	"github.com/albertorestifo/dijkstra"
+	//"gonum.org/v1/gonum/graph"
+	//"gonum.org/v1/gonum/graph/traverse"
+
+	//"gonum.org/v1/gonum/graph/path"
 	"gonum.org/v1/gonum/graph/simple"
 	"os"
 	"unicode"
@@ -33,6 +37,8 @@ func (k KeysHeld) allTrue() bool {
 	}
 	return true
 }
+
+var nodeIdToCoord = make(map[int64]Coord)
 
 func partOne(startingPos Coord, grid Grid, keys Items, doors Items) {
 	visited := make(Grid, len(grid))
@@ -75,11 +81,10 @@ func findNode(name rune, depth int, outer bool, portals []Portal) Portal {
 	return Portal{}
 }
 
-func buildRecursiveGraph(g *simple.WeightedUndirectedGraph, grid Grid, portals []Portal, depth int, maxDepth int) (*simple.WeightedUndirectedGraph, []Portal) {
+func buildRecursiveGraph2(g dijkstra.Graph, grid Grid, portals []Portal, depth int, maxDepth int) (dijkstra.Graph, []Portal) {
 
 	runeToId := make(map[rune]int64)
 	nodeCoordToId := make(map[Coord]int64)
-	nodeIdToCoord := make(map[int64]Coord)
 	portalToNodeId := make(map[rune][]int64)
 
 	if depth > maxDepth {
@@ -92,7 +97,8 @@ func buildRecursiveGraph(g *simple.WeightedUndirectedGraph, grid Grid, portals [
 		for x := 0; x < len(grid[y]); x++ {
 			tmpCoord := Coord{x, y}
 			if isHallway(grid[y][x]) {
-				g.AddNode(simple.Node(nodeCount))
+				nodeKey :=fmt.Sprintf("%d-%d-%d",nodeCount,x,y)
+				g[nodeKey] = make(map[string]int, 0)
 				if _, ok := nodeCoordToId[tmpCoord]; !ok {
 					nodeCoordToId[tmpCoord] = nodeCount
 					nodeIdToCoord[nodeCount] = tmpCoord
@@ -121,11 +127,10 @@ func buildRecursiveGraph(g *simple.WeightedUndirectedGraph, grid Grid, portals [
 				neighs := getNeighbours(Coord{x, y}, grid)
 				for _, neigh := range neighs {
 					neighNodeId := nodeCoordToId[neigh]
-					g.SetWeightedEdge(simple.WeightedEdge{
-						F: simple.Node(nodeId),
-						T: simple.Node(neighNodeId),
-						W: 1,
-					})
+					fromKey := fmt.Sprintf("%d-%d-%d",nodeId,x,y)
+					toKey := fmt.Sprintf("%d-%d-%d",neighNodeId,neigh.x,neigh.y)
+					g[fromKey][toKey] = 1
+					g[toKey][fromKey] = 1
 				}
 				// join portals
 				if isPortal(gVal) {
@@ -134,12 +139,10 @@ func buildRecursiveGraph(g *simple.WeightedUndirectedGraph, grid Grid, portals [
 						fromPortal := findNode(gVal, depth, true, portals)
 						toPortal := findNode(gVal, depth-1, false, portals)
 						if toPortal.nodeId > 0 {
-							fmt.Printf("Connecting %d back to %d\n", fromPortal.nodeId, toPortal.nodeId)
-							g.SetWeightedEdge(simple.WeightedEdge {
-								F: simple.Node(fromPortal.nodeId),
-								T: simple.Node(toPortal.nodeId),
-								W: 1,
-							})
+							fromKey := fmt.Sprintf("%d-%d-%d",fromPortal.nodeId,nodeIdToCoord[fromPortal.nodeId].x, nodeIdToCoord[fromPortal.nodeId].y)
+							toKey := fmt.Sprintf("%d-%d-%d",toPortal.nodeId,nodeIdToCoord[toPortal.nodeId].x, nodeIdToCoord[toPortal.nodeId].y)
+							g[fromKey][toKey] = 1
+							g[toKey][fromKey] = 1
 						}
 					}
 				}
@@ -147,13 +150,13 @@ func buildRecursiveGraph(g *simple.WeightedUndirectedGraph, grid Grid, portals [
 		}
 	}
 
-	return buildRecursiveGraph(g, grid, portals, depth+1, maxDepth)
+	return buildRecursiveGraph2(g, grid, portals, depth+1, maxDepth)
 }
 
-func makeRecursiveGraph(grid Grid)  (*simple.WeightedUndirectedGraph, []Portal) {
-	g := simple.NewWeightedUndirectedGraph(0, 0)
+func makeRecursiveGraph2(grid Grid)  (dijkstra.Graph, []Portal) {
+	g := dijkstra.Graph{}
 	p := make([]Portal, 0)
-	return buildRecursiveGraph(g, grid, p, 1, 6)
+	return buildRecursiveGraph2(g, grid, p, 1, 100)
 }
 
 func makeGraph(grid Grid) (*simple.WeightedUndirectedGraph, map[Coord]int64, map[int64]Coord, map[rune]int64) {
@@ -162,7 +165,7 @@ func makeGraph(grid Grid) (*simple.WeightedUndirectedGraph, map[Coord]int64, map
 
 	runeToId := make(map[rune]int64)
 	nodeCoordToId := make(map[Coord]int64)
-	nodeIdToCoord := make(map[int64]Coord)
+	//nodeIdToCoord := make(map[int64]Coord)
 	portalToNodeId := make(map[rune][]int64)
 
 	// create nodes, flag portals
@@ -254,25 +257,15 @@ func main() {
 		yPos++
 	}
 
-	g, _, _, portalToId := makeGraph(grid)
+	g, portals := makeRecursiveGraph2(grid)
 
-	fromId := portalToId['5']
-	toId := portalToId['W']
-	//fromId := portalToId['A']
-	//toId := portalToId['Z']
-
-	path1 := path.DijkstraAllPaths(g)
-	paths, weight := path1.AllBetween(fromId, toId)
-	fmt.Println(paths)
-	fmt.Println(weight)
-
-	g2, portals := makeRecursiveGraph(grid)
 	fromId2 := findNode('5', 1, true, portals)
 	toId2 := findNode('W', 1, true, portals)
-	fmt.Printf("Finding between %d and %d\n", fromId2, toId2)
-	path2 := path.DijkstraAllPaths(g2)
-	paths2, weight2 := path2.AllBetween(fromId2.nodeId, toId2.nodeId)
-	fmt.Println(paths2)
-	fmt.Println(weight2)
+	fmt.Printf("Finding between %d and %d\n", fromId2.nodeId, toId2.nodeId)
+
+	fromKey := fmt.Sprintf("%d-%d-%d", fromId2.nodeId, nodeIdToCoord[fromId2.nodeId].x, nodeIdToCoord[fromId2.nodeId].y)
+	toKey := fmt.Sprintf("%d-%d-%d", toId2.nodeId, nodeIdToCoord[toId2.nodeId].x, nodeIdToCoord[toId2.nodeId].y)
+	path, _, _ := g.Path(fromKey,toKey)
+	fmt.Println(len(path)-1)
 
 }
